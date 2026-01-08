@@ -17,15 +17,19 @@ import open from 'open';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
-import { FigmaService } from '../dist/services/figma.js';
-import { simplifyRawFigmaObject } from '../dist/extractors/design-extractor.js';
-import { extractFromDesign } from '../dist/extractors/node-walker.js';
-import { collapseSvgContainers } from '../dist/extractors/built-in.js';
-import { startPreviewServer } from '../dist/preview/server.js';
-import type { SimplifiedDesign } from '../dist/extractors/types.js';
+import dotenv from 'dotenv';
+import { FigmaService } from '../src/services/figma.js';
+import { simplifyRawFigmaObject } from '../src/extractors/design-extractor.js';
+import { extractFromDesign } from '../src/extractors/node-walker.js';
+import { collapseSvgContainers } from '../src/extractors/built-in.js';
+import { startPreviewServer } from '../src/preview/server.js';
+import type { SimplifiedDesign } from '../src/extractors/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load .env file
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 interface PreviewArgs {
   fileKey?: string;
@@ -113,7 +117,11 @@ async function main() {
     console.log('');
 
     // Initialize Figma service
-    const figmaService = new FigmaService(apiKey, oauthToken);
+    const figmaService = new FigmaService({
+      figmaApiKey: apiKey || '',
+      figmaOAuthToken: oauthToken || '',
+      useOAuth: !!oauthToken,
+    });
 
     // Fetch raw Figma data
     console.log('📥 Fetching Figma data...');
