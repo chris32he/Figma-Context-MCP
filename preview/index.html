@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Figma Preview - Intermediary Schema Validator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1e1e1e;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      background: #252526;
+      padding: 12px 20px;
+      border-bottom: 1px solid #3e3e42;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #cccccc;
+    }
+
+    .header .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .header button {
+      background: #0e639c;
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .header button:hover {
+      background: #1177bb;
+    }
+
+    .header button.secondary {
+      background: #3e3e42;
+    }
+
+    .header button.secondary:hover {
+      background: #505050;
+    }
+
+    .header .info {
+      font-size: 12px;
+      color: #858585;
+    }
+
+    .container {
+      display: flex;
+      height: calc(100vh - 50px);
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #3e3e42;
+      overflow: hidden;
+    }
+
+    .panel:last-child {
+      border-right: none;
+    }
+
+    .panel-header {
+      background: #2d2d30;
+      padding: 10px 16px;
+      border-bottom: 1px solid #3e3e42;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cccccc;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header .badge {
+      background: #0e639c;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow: auto;
+      background: #ffffff;
+    }
+
+    .figma-embed {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .rendered-output {
+      padding: 20px;
+      background: #f5f5f5;
+      min-height: 100%;
+    }
+
+    .inspector-panel {
+      max-width: 400px;
+      background: #252526;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .inspector-content {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .node-tree {
+      list-style: none;
+    }
+
+    .node-tree li {
+      margin: 4px 0;
+    }
+
+    .node-item {
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .node-item:hover {
+      background: #2a2d2e;
+    }
+
+    .node-item.selected {
+      background: #0e639c;
+      color: #fff;
+    }
+
+    .node-type {
+      color: #4ec9b0;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .node-name {
+      color: #9cdcfe;
+      flex: 1;
+    }
+
+    .node-details {
+      background: #1e1e1e;
+      padding: 12px;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+
+    .node-details pre {
+      color: #d4d4d4;
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-size: 14px;
+      color: #858585;
+    }
+
+    .error {
+      padding: 20px;
+      background: #5a1d1d;
+      color: #f48771;
+      border-radius: 4px;
+      margin: 20px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      padding: 12px 16px;
+      background: #2d2d30;
+      border-bottom: 1px solid #3e3e42;
+      font-size: 12px;
+    }
+
+    .stat-item {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .stat-label {
+      color: #858585;
+    }
+
+    .stat-value {
+      color: #cccccc;
+      font-weight: 600;
+    }
+
+    /* Highlight nodes on hover in rendered output */
+    .rendered-output [data-node-id]:hover {
+      outline: 2px solid #0e639c;
+      outline-offset: 2px;
+    }
+
+    .figma-design-root > * {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎨 Figma Preview - Intermediary Schema Validator</h1>
+    <div class="controls">
+      <div class="info" id="file-info">Loading...</div>
+      <button class="secondary" onclick="toggleInspector()">Toggle Inspector</button>
+      <button onclick="reload()">Reload</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Figma Embed Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Figma Original</span>
+        <span class="badge">Source</span>
+      </div>
+      <div class="panel-content">
+        <iframe id="figma-embed" class="figma-embed"></iframe>
+      </div>
+    </div>
+
+    <!-- Rendered Output Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Rendered from Intermediary Schema</span>
+        <span class="badge">Preview</span>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="panel-content">
+        <div id="rendered-output" class="rendered-output">
+          <div class="loading">Loading design data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector Panel -->
+    <div class="inspector-panel" id="inspector">
+      <div class="panel-header">
+        <span>Inspector</span>
+        <span class="badge" id="node-count">0 nodes</span>
+      </div>
+      <div class="inspector-content">
+        <div id="node-details">
+          <p style="color: #858585;">Click on a node to inspect its properties</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    let currentDesign = null;
+    let selectedNodeId = null;
+
+    // Fetch the design data from the server
+    async function loadDesign() {
+      try {
+        const response = await fetch('/api/design');
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        currentDesign = data.design;
+
+        // Update file info
+        document.getElementById('file-info').textContent = `${data.design.name}`;
+
+        // Load Figma embed
+        if (data.figmaUrl) {
+          const embedUrl = convertToEmbedUrl(data.figmaUrl);
+          document.getElementById('figma-embed').src = embedUrl;
+        }
+
+        // Render the design
+        renderDesign();
+
+        // Update stats
+        updateStats();
+
+      } catch (error) {
+        console.error('Failed to load design:', error);
+        document.getElementById('rendered-output').innerHTML = `
+          <div class="error">
+            <strong>Error loading design:</strong><br>
+            ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    function convertToEmbedUrl(figmaUrl) {
+      // Convert regular Figma URL to embed URL
+      // https://www.figma.com/file/ABC123/Name?node-id=1:2
+      // -> https://www.figma.com/embed?embed_host=preview&url=...
+      return `https://www.figma.com/embed?embed_host=preview&url=${encodeURIComponent(figmaUrl)}`;
+    }
+
+    function renderDesign() {
+      if (!currentDesign) return;
+
+      const container = document.getElementById('rendered-output');
+      container.innerHTML = '';
+
+      // Import and use the renderer (will be bundled)
+      import('/api/renderer.js').then(({ renderFigmaDesign }) => {
+        const rendered = renderFigmaDesign(currentDesign);
+        container.appendChild(rendered);
+
+        // Add click handlers for inspection
+        container.querySelectorAll('[data-node-id]').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nodeId = el.getAttribute('data-node-id');
+            selectNode(nodeId);
+          });
+        });
+      });
+    }
+
+    function selectNode(nodeId) {
+      selectedNodeId = nodeId;
+      const node = findNodeById(currentDesign.nodes, nodeId);
+
+      if (node) {
+        displayNodeDetails(node);
+
+        // Highlight in rendered output
+        document.querySelectorAll('[data-node-id]').forEach(el => {
+          el.style.outline = '';
+        });
+        const element = document.querySelector(`[data-node-id="${nodeId}"]`);
+        if (element) {
+          element.style.outline = '2px solid #0e639c';
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+
+    function findNodeById(nodes, id) {
+      for (const node of nodes) {
+        if (node.id === id) return node;
+        if (node.children) {
+          const found = findNodeById(node.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    function displayNodeDetails(node) {
+      const container = document.getElementById('node-details');
+
+      // Resolve styles
+      const resolvedNode = { ...node };
+      if (node.layout && currentDesign.globalVars.styles[node.layout]) {
+        resolvedNode.layout = currentDesign.globalVars.styles[node.layout];
+      }
+      if (node.fills && currentDesign.globalVars.styles[node.fills]) {
+        resolvedNode.fills = currentDesign.globalVars.styles[node.fills];
+      }
+      if (node.textStyle && currentDesign.globalVars.styles[node.textStyle]) {
+        resolvedNode.textStyle = currentDesign.globalVars.styles[node.textStyle];
+      }
+      if (node.effects && currentDesign.globalVars.styles[node.effects]) {
+        resolvedNode.effects = currentDesign.globalVars.styles[node.effects];
+      }
+
+      container.innerHTML = `
+        <div class="node-details">
+          <pre>${JSON.stringify(resolvedNode, null, 2)}</pre>
+        </div>
+      `;
+    }
+
+    function updateStats() {
+      const nodeCount = countNodes(currentDesign.nodes);
+      const styleCount = Object.keys(currentDesign.globalVars.styles || {}).length;
+      const componentCount = Object.keys(currentDesign.components || {}).length;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-item">
+          <span class="stat-label">Nodes:</span>
+          <span class="stat-value">${nodeCount}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Styles:</span>
+          <span class="stat-value">${styleCount}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Components:</span>
+          <span class="stat-value">${componentCount}</span>
+        </div>
+      `;
+
+      document.getElementById('node-count').textContent = `${nodeCount} nodes`;
+    }
+
+    function countNodes(nodes) {
+      let count = nodes.length;
+      nodes.forEach(node => {
+        if (node.children) {
+          count += countNodes(node.children);
+        }
+      });
+      return count;
+    }
+
+    function toggleInspector() {
+      const inspector = document.getElementById('inspector');
+      inspector.style.display = inspector.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function reload() {
+      window.location.reload();
+    }
+
+    // Load design on page load
+    loadDesign();
+  </script>
+</body>
+</html>

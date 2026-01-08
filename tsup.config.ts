@@ -5,7 +5,13 @@ const packageVersion = process.env.npm_package_version;
 
 export default defineConfig({
   clean: true,
-  entry: ["src/index.ts", "src/bin.ts", "src/mcp-server.ts"],
+  entry: [
+    "src/index.ts",
+    "src/bin.ts",
+    "src/mcp-server.ts",
+    "src/preview/server.ts",
+    "src/preview/renderer.ts",
+  ],
   format: ["esm"],
   minify: !isDev,
   target: "esnext",
