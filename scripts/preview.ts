@@ -20,8 +20,7 @@ import fs from 'fs/promises';
 import dotenv from 'dotenv';
 import { FigmaService } from '../src/services/figma.js';
 import { simplifyRawFigmaObject } from '../src/extractors/design-extractor.js';
-import { extractFromDesign } from '../src/extractors/node-walker.js';
-import { collapseSvgContainers } from '../src/extractors/built-in.js';
+import { allExtractors, collapseSvgContainers } from '../src/extractors/built-in.js';
 import { startPreviewServer } from '../src/preview/server.js';
 import type { SimplifiedDesign } from '../src/extractors/types.js';
 
@@ -129,17 +128,11 @@ async function main() {
       ? await figmaService.getRawNode(fileKey, nodeId)
       : await figmaService.getRawFile(fileKey);
 
-    // Simplify the design
+    // Simplify the design (includes extraction and SVG optimization)
     console.log('🔄 Simplifying design data...');
-    const simplifiedData = simplifyRawFigmaObject(rawData);
-
-    // Extract data using node walker
-    console.log('🏗️  Extracting layout, styles, and components...');
-    const extractedDesign = extractFromDesign(simplifiedData);
-
-    // Collapse SVG containers
-    console.log('🖼️  Optimizing SVG containers...');
-    const finalDesign = collapseSvgContainers(extractedDesign) as SimplifiedDesign;
+    const finalDesign = simplifyRawFigmaObject(rawData, allExtractors, {
+      afterChildren: collapseSvgContainers,
+    });
 
     // Save to logs directory for debugging
     const logsDir = path.join(__dirname, '../logs');
