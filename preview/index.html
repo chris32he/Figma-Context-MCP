@@ -118,6 +118,7 @@
     }
 
     .rendered-output {
+      position: relative;
       padding: 20px;
       background: #f5f5f5;
       min-height: 100%;
@@ -435,18 +436,19 @@
 
       element.style.boxSizing = 'border-box';
 
-      // Handle position first - absolute positioning takes precedence
-      if (layout.position === 'absolute') {
+      // Determine if this node should be absolutely positioned
+      // This happens when:
+      // 1. position is explicitly 'absolute', OR
+      // 2. It has locationRelativeToParent (meaning it's not in an auto-layout flow)
+      const useAbsolutePositioning = layout.position === 'absolute' ||
+        (layout.locationRelativeToParent && layout.mode !== 'row' && layout.mode !== 'column');
+
+      if (useAbsolutePositioning) {
         element.style.position = 'absolute';
         if (layout.locationRelativeToParent) {
           element.style.left = `${layout.locationRelativeToParent.x}px`;
           element.style.top = `${layout.locationRelativeToParent.y}px`;
         }
-      } else if (layout.locationRelativeToParent && layout.mode === 'none') {
-        // For non-autolayout frames, use absolute positioning
-        element.style.position = 'absolute';
-        element.style.left = `${layout.locationRelativeToParent.x}px`;
-        element.style.top = `${layout.locationRelativeToParent.y}px`;
       }
 
       // Apply display mode based on layout mode
@@ -458,9 +460,11 @@
         if (layout.alignItems) element.style.alignItems = layout.alignItems;
         if (layout.wrap) element.style.flexWrap = 'wrap';
         if (layout.gap) element.style.gap = layout.gap;
-      } else {
-        // mode === 'none' - no autolayout, use relative positioning for children
-        element.style.position = 'relative';
+      } else if (layout.mode === 'none') {
+        // mode === 'none' - no autolayout, use relative positioning to contain absolutely positioned children
+        if (!useAbsolutePositioning) {
+          element.style.position = 'relative';
+        }
       }
 
       if (layout.alignSelf) element.style.alignSelf = layout.alignSelf;
@@ -513,7 +517,7 @@
       if (node.fills) {
         const fillsArray = resolveStyle(node.fills);
         if (fillsArray && Array.isArray(fillsArray)) {
-          const cssValues = fillsArray.map(fill => convertFillToCSS(fill)).filter(Boolean);
+          const cssValues = fillsArray.map(fill => convertFillToCSS(fill, element)).filter(Boolean);
           if (cssValues.length > 0) {
             element.style.background = cssValues.join(', ');
           }
@@ -557,7 +561,7 @@
       }
     }
 
-    function convertFillToCSS(fill) {
+    function convertFillToCSS(fill, element) {
       // Simple color string
       if (typeof fill === 'string') {
         return fill;
@@ -568,6 +572,12 @@
         if (fill.type === 'IMAGE') {
           // Use the downloaded image if available
           if (fill.imageRef) {
+            // Set background properties for proper image display
+            if (element) {
+              element.style.backgroundSize = 'cover';
+              element.style.backgroundPosition = 'center';
+              element.style.backgroundRepeat = 'no-repeat';
+            }
             return `url(/assets/${fill.imageRef}.png)`;
           }
           // Fallback placeholder
