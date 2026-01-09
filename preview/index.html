@@ -432,24 +432,40 @@
       const layout = resolveStyle(node.layout);
       if (!layout) return;
 
-      element.style.display = 'flex';
       element.style.boxSizing = 'border-box';
 
-      if (layout.mode === 'row') {
-        element.style.flexDirection = 'row';
-      } else if (layout.mode === 'column') {
-        element.style.flexDirection = 'column';
-      } else {
-        element.style.display = 'block';
+      // Handle position first - absolute positioning takes precedence
+      if (layout.position === 'absolute') {
+        element.style.position = 'absolute';
+        if (layout.locationRelativeToParent) {
+          element.style.left = `${layout.locationRelativeToParent.x}px`;
+          element.style.top = `${layout.locationRelativeToParent.y}px`;
+        }
+      } else if (layout.locationRelativeToParent && layout.mode === 'none') {
+        // For non-autolayout frames, use absolute positioning
+        element.style.position = 'absolute';
+        element.style.left = `${layout.locationRelativeToParent.x}px`;
+        element.style.top = `${layout.locationRelativeToParent.y}px`;
       }
 
-      if (layout.justifyContent) element.style.justifyContent = layout.justifyContent;
-      if (layout.alignItems) element.style.alignItems = layout.alignItems;
+      // Apply display mode based on layout mode
+      if (layout.mode === 'row' || layout.mode === 'column') {
+        element.style.display = 'flex';
+        element.style.flexDirection = layout.mode;
+
+        if (layout.justifyContent) element.style.justifyContent = layout.justifyContent;
+        if (layout.alignItems) element.style.alignItems = layout.alignItems;
+        if (layout.wrap) element.style.flexWrap = 'wrap';
+        if (layout.gap) element.style.gap = layout.gap;
+      } else {
+        // mode === 'none' - no autolayout, use relative positioning for children
+        element.style.position = 'relative';
+      }
+
       if (layout.alignSelf) element.style.alignSelf = layout.alignSelf;
-      if (layout.wrap) element.style.flexWrap = 'wrap';
-      if (layout.gap) element.style.gap = layout.gap;
       if (layout.padding) element.style.padding = layout.padding;
 
+      // Apply dimensions
       if (layout.dimensions) {
         if (layout.dimensions.width !== undefined) {
           element.style.width = `${layout.dimensions.width}px`;
@@ -462,6 +478,7 @@
         }
       }
 
+      // Apply sizing constraints
       if (layout.sizing) {
         if (layout.sizing.horizontal === 'fill') {
           element.style.flexGrow = '1';
@@ -478,14 +495,7 @@
         }
       }
 
-      if (layout.position === 'absolute') {
-        element.style.position = 'absolute';
-        if (layout.locationRelativeToParent) {
-          element.style.left = `${layout.locationRelativeToParent.x}px`;
-          element.style.top = `${layout.locationRelativeToParent.y}px`;
-        }
-      }
-
+      // Apply overflow
       if (layout.overflowScroll) {
         if (layout.overflowScroll.includes('x') && layout.overflowScroll.includes('y')) {
           element.style.overflow = 'auto';
@@ -502,9 +512,17 @@
         const fills = resolveStyle(node.fills);
         if (fills) {
           if (Array.isArray(fills)) {
-            element.style.background = fills.join(', ');
+            // Multiple fills - combine them
+            const cssValues = fills.map(fill => convertFillToCSS(fill)).filter(Boolean);
+            if (cssValues.length > 0) {
+              element.style.background = cssValues.join(', ');
+            }
           } else {
-            element.style.background = fills;
+            // Single fill
+            const cssValue = convertFillToCSS(fills);
+            if (cssValue) {
+              element.style.background = cssValue;
+            }
           }
         }
       }
@@ -527,6 +545,27 @@
       if (node.opacity !== undefined) {
         element.style.opacity = String(node.opacity);
       }
+    }
+
+    function convertFillToCSS(fill) {
+      // Simple color string
+      if (typeof fill === 'string') {
+        return fill;
+      }
+
+      // Complex fill object
+      if (fill && typeof fill === 'object') {
+        if (fill.type === 'IMAGE') {
+          // For now, show a placeholder since we don't have the actual images
+          return `linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd), linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd)`;
+        } else if (fill.type === 'GRADIENT_LINEAR' || fill.type === 'GRADIENT_RADIAL' || fill.type === 'GRADIENT_ANGULAR' || fill.type === 'GRADIENT_DIAMOND') {
+          return fill.gradient || '';
+        } else if (fill.type === 'PATTERN') {
+          return `linear-gradient(135deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee)`;
+        }
+      }
+
+      return null;
     }
 
     function applyText(element, node) {
