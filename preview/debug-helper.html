@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Helper - Check One Node</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+    pre { background: #252526; padding: 12px; border-radius: 4px; overflow-x: auto; }
+    h2 { color: #4ec9b0; }
+  </style>
+</head>
+<body>
+  <h1>Debug Helper - Inspect Single Node with Image</h1>
+  <button onclick="loadAndInspect()">Load Design and Inspect Image Node</button>
+
+  <div id="output"></div>
+
+  <script>
+    async function loadAndInspect() {
+      const response = await fetch('/api/design');
+      const data = await response.json();
+      const design = data.design;
+
+      // Find first node with image fill
+      function findImageNode(nodes) {
+        for (const node of nodes) {
+          if (node.fills) {
+            const fills = design.globalVars.styles[node.fills];
+            if (fills && Array.isArray(fills)) {
+              const hasImage = fills.some(f => f && f.type === 'IMAGE');
+              if (hasImage) return node;
+            }
+          }
+          if (node.children) {
+            const found = findImageNode(node.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+
+      const imageNode = findImageNode(design.nodes);
+
+      if (!imageNode) {
+        document.getElementById('output').innerHTML = '<p>No image node found</p>';
+        return;
+      }
+
+      // Resolve all styles
+      const resolved = {
+        ...imageNode,
+        layout: imageNode.layout ? design.globalVars.styles[imageNode.layout] || imageNode.layout : null,
+        fills: imageNode.fills ? design.globalVars.styles[imageNode.fills] || imageNode.fills : null,
+        textStyle: imageNode.textStyle ? design.globalVars.styles[imageNode.textStyle] || imageNode.textStyle : null,
+      };
+
+      document.getElementById('output').innerHTML = `
+        <h2>Node: ${imageNode.name}</h2>
+        <h3>Type: ${imageNode.type}</h3>
+
+        <h2>Layout Data</h2>
+        <pre>${JSON.stringify(resolved.layout, null, 2)}</pre>
+
+        <h2>Fills Data</h2>
+        <pre>${JSON.stringify(resolved.fills, null, 2)}</pre>
+
+        <h2>What CSS Would Be Applied?</h2>
+        <pre>
+width: ${resolved.layout?.dimensions?.width ? `${resolved.layout.dimensions.width}px` : 'MISSING!'}
+height: ${resolved.layout?.dimensions?.height ? `${resolved.layout.dimensions.height}px` : 'MISSING!'}
+position: ${resolved.layout?.position || (resolved.layout?.locationRelativeToParent ? 'absolute' : 'relative')}
+left: ${resolved.layout?.locationRelativeToParent?.x ? `${resolved.layout.locationRelativeToParent.x}px` : 'auto'}
+top: ${resolved.layout?.locationRelativeToParent?.y ? `${resolved.layout.locationRelativeToParent.y}px` : 'auto'}
+background: ${resolved.fills ? resolved.fills.map(f => f.type === 'IMAGE' ? `url(/assets/${f.imageRef}.png)` : f).join(', ') : 'none'}
+        </pre>
+
+        <h2>Test Render</h2>
+        <div style="
+          width: ${resolved.layout?.dimensions?.width || 100}px;
+          height: ${resolved.layout?.dimensions?.height || 100}px;
+          background: ${resolved.fills && resolved.fills[0]?.imageRef ? `url(/assets/${resolved.fills[0].imageRef}.png)` : '#ff0000'};
+          background-size: cover;
+          background-position: center;
+          border: 2px solid #0e639c;
+        ">
+          Test: Should show image if dimensions exist
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
