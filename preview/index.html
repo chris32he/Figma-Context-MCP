@@ -876,14 +876,14 @@
 
       const results = [];
       for (const imageRef of imageRefs) {
-        const url = \`/assets/\${imageRef}.png\`;
+        const url = `/assets/${imageRef}.png`;
         try {
           const response = await fetch(url, { method: 'HEAD' });
           const status = response.ok ? '✅' : '❌';
           const color = response.ok ? '#89d185' : '#f48771';
-          results.push(\`<div style="color: \${color};">\${status} \${imageRef}.png (\${response.status})</div>\`);
+          results.push(`<div style="color: ${color};">${status} ${imageRef}.png (${response.status})</div>`);
         } catch (err) {
-          results.push(\`<div style="color: #f48771;">❌ \${imageRef}.png (failed to fetch)</div>\`);
+          results.push(`<div style="color: #f48771;">❌ ${imageRef}.png (failed to fetch)</div>`);
         }
       }
 
@@ -905,7 +905,7 @@
 
     function addDebugLog(type, message) {
       debugLog.push({ type, message, timestamp: new Date().toISOString() });
-      console.log(\`[\${type.toUpperCase()}]\`, message);
+      console.log(`[${type.toUpperCase()}]`, message);
     }
 
     // Add global debug logging
