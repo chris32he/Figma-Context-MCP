@@ -566,8 +566,12 @@
       // Complex fill object
       if (fill && typeof fill === 'object') {
         if (fill.type === 'IMAGE') {
-          // For now, show a placeholder since we don't have the actual images
-          return `linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd), linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd)`;
+          // Use the downloaded image if available
+          if (fill.imageRef) {
+            return `url(/assets/${fill.imageRef}.png)`;
+          }
+          // Fallback placeholder
+          return `linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd)`;
         } else if (fill.type === 'GRADIENT_LINEAR' || fill.type === 'GRADIENT_RADIAL' || fill.type === 'GRADIENT_ANGULAR' || fill.type === 'GRADIENT_DIAMOND') {
           return fill.gradient || '';
         } else if (fill.type === 'PATTERN') {

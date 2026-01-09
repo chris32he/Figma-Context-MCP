@@ -231,41 +231,56 @@ async function downloadImages(
   assetsDir: string
 ): Promise<void> {
   const imagesToDownload: Array<{
-    nodeId: string;
-    fileName: string;
     imageRef?: string;
+    nodeId?: string;
+    fileName: string;
+    needsCropping?: boolean;
+    cropTransform?: any;
+    requiresImageDimensions?: boolean;
   }> = [];
 
-  // Collect all nodes that need images
-  function collectImageNodes(nodes: any[]) {
-    for (const node of nodes) {
-      // SVG exports
-      if (node.type === 'IMAGE-SVG') {
-        imagesToDownload.push({
-          nodeId: node.id,
-          fileName: `${sanitizeFileName(node.name)}.svg`,
-        });
-      }
+  // Track processed imageRefs to avoid duplicates
+  const processedImageRefs = new Set<string>();
 
-      // Image fills
-      if (node.fills) {
-        const fills = design.globalVars.styles[node.fills];
-        if (fills && typeof fills === 'object' && 'url' in fills) {
+  // Collect all image fills from globalVars.styles
+  for (const [styleId, styleValue] of Object.entries(design.globalVars.styles)) {
+    // Check if it's a fills array
+    if (Array.isArray(styleValue)) {
+      for (const fill of styleValue) {
+        if (fill && typeof fill === 'object' && fill.type === 'IMAGE' && fill.imageRef) {
+          // Skip if already processed
+          if (processedImageRefs.has(fill.imageRef)) continue;
+          processedImageRefs.add(fill.imageRef);
+
+          const fileName = `${fill.imageRef}.png`;
           imagesToDownload.push({
-            nodeId: node.id,
-            fileName: `${sanitizeFileName(node.name)}.png`,
-            imageRef: (fills as any).imageRef,
+            imageRef: fill.imageRef,
+            fileName,
+            needsCropping: fill.imageDownloadArguments?.needsCropping,
+            cropTransform: fill.imageDownloadArguments?.cropTransform,
+            requiresImageDimensions: fill.imageDownloadArguments?.requiresImageDimensions,
           });
         }
-      }
-
-      if (node.children) {
-        collectImageNodes(node.children);
       }
     }
   }
 
-  collectImageNodes(design.nodes);
+  // Collect SVG export nodes
+  function collectSvgNodes(nodes: any[]) {
+    for (const node of nodes) {
+      if (node.type === 'IMAGE-SVG') {
+        imagesToDownload.push({
+          nodeId: node.id,
+          fileName: `${sanitizeFileName(node.name)}-${node.id}.svg`,
+        });
+      }
+      if (node.children) {
+        collectSvgNodes(node.children);
+      }
+    }
+  }
+
+  collectSvgNodes(design.nodes);
 
   if (imagesToDownload.length === 0) {
     console.log('  No images to download');
@@ -274,48 +289,24 @@ async function downloadImages(
 
   console.log(`  Found ${imagesToDownload.length} images to download`);
 
-  // Download images in batches
-  const batchSize = 10;
-  for (let i = 0; i < imagesToDownload.length; i += batchSize) {
-    const batch = imagesToDownload.slice(i, i + batchSize);
-    await Promise.all(
-      batch.map(async (item) => {
-        try {
-          const filePath = path.join(assetsDir, item.fileName);
-
-          // Get image URL
-          let imageUrl: string;
-          if (item.imageRef) {
-            // Image fill
-            const urls = await figmaService.getImageFillUrls(fileKey, [item.imageRef]);
-            imageUrl = urls[item.imageRef];
-          } else {
-            // SVG render
-            const urls = await figmaService.getNodeRenderUrls(fileKey, [item.nodeId], {
-              format: 'svg',
-            });
-            imageUrl = urls[item.nodeId];
-          }
-
-          if (!imageUrl) {
-            console.warn(`  ⚠️  No URL for ${item.fileName}`);
-            return;
-          }
-
-          // Download
-          const response = await fetch(imageUrl);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-
-          const buffer = await response.arrayBuffer();
-          await fs.writeFile(filePath, Buffer.from(buffer));
-
-        } catch (error) {
-          console.warn(`  ⚠️  Failed to download ${item.fileName}:`, (error as Error).message);
-        }
-      })
+  // Use the built-in downloadImages method
+  try {
+    const results = await figmaService.downloadImages(
+      fileKey,
+      assetsDir,
+      imagesToDownload,
+      { pngScale: 2 }
     );
+
+    const successful = results.filter(r => r.status === 'success').length;
+    const failed = results.filter(r => r.status === 'error').length;
+
+    console.log(`  ✅ Downloaded ${successful} images successfully`);
+    if (failed > 0) {
+      console.warn(`  ⚠️  ${failed} images failed to download`);
+    }
+  } catch (error) {
+    throw new Error(`Failed to download images: ${(error as Error).message}`);
   }
 }
 
