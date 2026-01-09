@@ -347,20 +347,224 @@
       const container = document.getElementById('rendered-output');
       container.innerHTML = '';
 
-      // Import and use the renderer (will be bundled)
-      import('/api/renderer.js').then(({ renderFigmaDesign }) => {
-        const rendered = renderFigmaDesign(currentDesign);
-        container.appendChild(rendered);
+      // Render nodes
+      currentDesign.nodes.forEach(node => {
+        const element = renderNode(node);
+        if (element) {
+          container.appendChild(element);
+        }
+      });
 
-        // Add click handlers for inspection
-        container.querySelectorAll('[data-node-id]').forEach(el => {
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const nodeId = el.getAttribute('data-node-id');
-            selectNode(nodeId);
-          });
+      // Add click handlers for inspection
+      container.querySelectorAll('[data-node-id]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const nodeId = el.getAttribute('data-node-id');
+          selectNode(nodeId);
         });
       });
+    }
+
+    function renderNode(node) {
+      // Skip certain node types
+      if (node.type === 'DOCUMENT' || node.type === 'CANVAS') {
+        const fragment = document.createElement('div');
+        fragment.className = 'canvas-wrapper';
+        if (node.children) {
+          node.children.forEach(child => {
+            const el = renderNode(child);
+            if (el) fragment.appendChild(el);
+          });
+        }
+        return fragment;
+      }
+
+      const element = createElementForNode(node);
+
+      // Apply styles
+      applyLayout(element, node);
+      applyVisuals(element, node);
+      applyText(element, node);
+      applyEffects(element, node);
+
+      // Add debug info
+      element.setAttribute('data-node-id', node.id);
+      element.setAttribute('data-node-name', node.name);
+      element.setAttribute('data-node-type', node.type);
+      element.title = `${node.type}: ${node.name}`;
+
+      // Render children
+      if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+          const childElement = renderNode(child);
+          if (childElement) {
+            element.appendChild(childElement);
+          }
+        });
+      }
+
+      return element;
+    }
+
+    function createElementForNode(node) {
+      if (node.type === 'TEXT') {
+        const div = document.createElement('div');
+        div.className = 'figma-text';
+        div.textContent = node.text || '';
+        return div;
+      }
+
+      if (node.type === 'IMAGE-SVG') {
+        const div = document.createElement('div');
+        div.className = 'figma-svg';
+        div.innerHTML = `<div style="background: #ddd; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #666;">SVG: ${node.name}</div>`;
+        return div;
+      }
+
+      const div = document.createElement('div');
+      div.className = `figma-${node.type.toLowerCase()}`;
+      return div;
+    }
+
+    function applyLayout(element, node) {
+      if (!node.layout) return;
+
+      const layout = resolveStyle(node.layout);
+      if (!layout) return;
+
+      element.style.display = 'flex';
+      element.style.boxSizing = 'border-box';
+
+      if (layout.mode === 'row') {
+        element.style.flexDirection = 'row';
+      } else if (layout.mode === 'column') {
+        element.style.flexDirection = 'column';
+      } else {
+        element.style.display = 'block';
+      }
+
+      if (layout.justifyContent) element.style.justifyContent = layout.justifyContent;
+      if (layout.alignItems) element.style.alignItems = layout.alignItems;
+      if (layout.alignSelf) element.style.alignSelf = layout.alignSelf;
+      if (layout.wrap) element.style.flexWrap = 'wrap';
+      if (layout.gap) element.style.gap = layout.gap;
+      if (layout.padding) element.style.padding = layout.padding;
+
+      if (layout.dimensions) {
+        if (layout.dimensions.width !== undefined) {
+          element.style.width = `${layout.dimensions.width}px`;
+        }
+        if (layout.dimensions.height !== undefined) {
+          element.style.height = `${layout.dimensions.height}px`;
+        }
+        if (layout.dimensions.aspectRatio !== undefined) {
+          element.style.aspectRatio = String(layout.dimensions.aspectRatio);
+        }
+      }
+
+      if (layout.sizing) {
+        if (layout.sizing.horizontal === 'fill') {
+          element.style.flexGrow = '1';
+          element.style.width = '100%';
+        } else if (layout.sizing.horizontal === 'hug') {
+          element.style.width = 'fit-content';
+        }
+
+        if (layout.sizing.vertical === 'fill') {
+          element.style.flexGrow = '1';
+          element.style.height = '100%';
+        } else if (layout.sizing.vertical === 'hug') {
+          element.style.height = 'fit-content';
+        }
+      }
+
+      if (layout.position === 'absolute') {
+        element.style.position = 'absolute';
+        if (layout.locationRelativeToParent) {
+          element.style.left = `${layout.locationRelativeToParent.x}px`;
+          element.style.top = `${layout.locationRelativeToParent.y}px`;
+        }
+      }
+
+      if (layout.overflowScroll) {
+        if (layout.overflowScroll.includes('x') && layout.overflowScroll.includes('y')) {
+          element.style.overflow = 'auto';
+        } else if (layout.overflowScroll.includes('x')) {
+          element.style.overflowX = 'auto';
+        } else if (layout.overflowScroll.includes('y')) {
+          element.style.overflowY = 'auto';
+        }
+      }
+    }
+
+    function applyVisuals(element, node) {
+      if (node.fills) {
+        const fills = resolveStyle(node.fills);
+        if (fills) {
+          if (Array.isArray(fills)) {
+            element.style.background = fills.join(', ');
+          } else {
+            element.style.background = fills;
+          }
+        }
+      }
+
+      if (node.strokes) {
+        const strokes = resolveStyle(node.strokes);
+        if (strokes) {
+          element.style.border = `${node.strokeWeight || '1px'} solid ${strokes}`;
+        }
+      }
+
+      if (node.strokeDashes && node.strokeDashes.length > 0) {
+        element.style.borderStyle = 'dashed';
+      }
+
+      if (node.borderRadius) {
+        element.style.borderRadius = node.borderRadius;
+      }
+
+      if (node.opacity !== undefined) {
+        element.style.opacity = String(node.opacity);
+      }
+    }
+
+    function applyText(element, node) {
+      if (!node.textStyle) return;
+
+      const textStyle = resolveStyle(node.textStyle);
+      if (!textStyle) return;
+
+      if (textStyle.fontFamily) element.style.fontFamily = textStyle.fontFamily;
+      if (textStyle.fontWeight) element.style.fontWeight = String(textStyle.fontWeight);
+      if (textStyle.fontSize) element.style.fontSize = `${textStyle.fontSize}px`;
+      if (textStyle.lineHeight) element.style.lineHeight = textStyle.lineHeight;
+      if (textStyle.letterSpacing) element.style.letterSpacing = textStyle.letterSpacing;
+      if (textStyle.textCase) element.style.textTransform = textStyle.textCase.toLowerCase();
+      if (textStyle.textAlignHorizontal) element.style.textAlign = textStyle.textAlignHorizontal.toLowerCase();
+      if (textStyle.textAlignVertical) element.style.alignItems = textStyle.textAlignVertical.toLowerCase();
+    }
+
+    function applyEffects(element, node) {
+      if (!node.effects) return;
+
+      const effects = resolveStyle(node.effects);
+      if (!effects) return;
+
+      if (effects.boxShadow) element.style.boxShadow = effects.boxShadow;
+      if (effects.filter) element.style.filter = effects.filter;
+      if (effects.backdropFilter) element.style.backdropFilter = effects.backdropFilter;
+      if (effects.textShadow) element.style.textShadow = effects.textShadow;
+    }
+
+    function resolveStyle(styleRef) {
+      if (!styleRef) return null;
+
+      if (currentDesign.globalVars.styles && currentDesign.globalVars.styles[styleRef]) {
+        return currentDesign.globalVars.styles[styleRef];
+      }
+
+      return styleRef;
     }
 
     function selectNode(nodeId) {
