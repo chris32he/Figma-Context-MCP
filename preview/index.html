@@ -576,8 +576,20 @@
 
           const cssValues = fillsArray.map(fill => convertFillToCSS(fill, element)).filter(Boolean);
           if (cssValues.length > 0) {
-            element.style.background = cssValues.join(', ');
-            element.setAttribute('data-bg-css', cssValues.join(', '));
+            // Debug: Check for objects in cssValues
+            const hasObjects = cssValues.some(v => typeof v === 'object');
+            if (hasObjects) {
+              addDebugLog('error', `cssValues contains objects! Node: ${node.name}, values: ${JSON.stringify(cssValues)}`);
+            }
+
+            const backgroundCSS = cssValues.join(', ');
+            element.style.background = backgroundCSS;
+            element.setAttribute('data-bg-css', backgroundCSS);
+
+            // Debug log for verification
+            if (cssValues.length > 1) {
+              addDebugLog('info', `Multi-fill background on ${node.name}: ${backgroundCSS.substring(0, 100)}...`);
+            }
           }
         }
       }
@@ -641,12 +653,20 @@
           // Fallback placeholder
           return `linear-gradient(135deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd)`;
         } else if (fill.type === 'GRADIENT_LINEAR' || fill.type === 'GRADIENT_RADIAL' || fill.type === 'GRADIENT_ANGULAR' || fill.type === 'GRADIENT_DIAMOND') {
-          return fill.gradient || '';
+          const gradientValue = fill.gradient || '';
+          addDebugLog('info', `Converting gradient: type=${fill.type}, value=${gradientValue.substring(0, 50)}...`);
+          return gradientValue;
         } else if (fill.type === 'PATTERN') {
           return `linear-gradient(135deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee)`;
+        } else {
+          // Unknown fill type - log warning
+          addDebugLog('warn', `Unknown fill type: ${fill.type}, object: ${JSON.stringify(fill).substring(0, 100)}`);
+          return null;
         }
       }
 
+      // If we get here, fill is not a string or object
+      addDebugLog('error', `Invalid fill value: ${typeof fill}, ${fill}`);
       return null;
     }
 
