@@ -508,29 +508,38 @@
     }
 
     function applyVisuals(element, node) {
+      // Fills - always an array in globalVars
       if (node.fills) {
-        const fills = resolveStyle(node.fills);
-        if (fills) {
-          if (Array.isArray(fills)) {
-            // Multiple fills - combine them
-            const cssValues = fills.map(fill => convertFillToCSS(fill)).filter(Boolean);
-            if (cssValues.length > 0) {
-              element.style.background = cssValues.join(', ');
-            }
-          } else {
-            // Single fill
-            const cssValue = convertFillToCSS(fills);
-            if (cssValue) {
-              element.style.background = cssValue;
-            }
+        const fillsArray = resolveStyle(node.fills);
+        if (fillsArray && Array.isArray(fillsArray)) {
+          const cssValues = fillsArray.map(fill => convertFillToCSS(fill)).filter(Boolean);
+          if (cssValues.length > 0) {
+            element.style.background = cssValues.join(', ');
           }
         }
       }
 
+      // Strokes - can be an object with colors array or a direct color array
       if (node.strokes) {
-        const strokes = resolveStyle(node.strokes);
-        if (strokes) {
-          element.style.border = `${node.strokeWeight || '1px'} solid ${strokes}`;
+        const strokesData = resolveStyle(node.strokes);
+        if (strokesData) {
+          let strokeColors;
+          let strokeWeight = node.strokeWeight || '1px';
+
+          // Handle both object format {colors, strokeWeight} and direct array
+          if (strokesData.colors) {
+            strokeColors = strokesData.colors;
+            if (strokesData.strokeWeight) strokeWeight = strokesData.strokeWeight;
+          } else if (Array.isArray(strokesData)) {
+            strokeColors = strokesData;
+          } else {
+            strokeColors = [strokesData];
+          }
+
+          if (strokeColors && strokeColors.length > 0) {
+            const strokeColor = strokeColors[0]; // Use first stroke color
+            element.style.border = `${strokeWeight} solid ${strokeColor}`;
+          }
         }
       }
 
