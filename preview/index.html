@@ -283,6 +283,7 @@
       <div class="panel-header">
         <span>Inspector</span>
         <span class="badge" id="node-count">0 nodes</span>
+        <button class="secondary" onclick="showDebugData()" style="font-size: 11px; padding: 3px 8px; margin-left: 8px;">Show Raw Data</button>
       </div>
       <div class="inspector-content">
         <div id="node-details">
@@ -712,8 +713,37 @@
       window.location.reload();
     }
 
+    function showDebugData() {
+      if (!currentDesign) {
+        alert('No design data loaded');
+        return;
+      }
+
+      const container = document.getElementById('node-details');
+      container.innerHTML = `
+        <div style="margin-bottom: 12px;">
+          <button onclick="showDebugData()" style="padding: 6px 12px; margin-right: 8px;">Full Data</button>
+          <button onclick="document.getElementById('node-details').innerHTML='<p style=color:#858585>Click on a node to inspect its properties</p>'" style="padding: 6px 12px;">Clear</button>
+        </div>
+        <div class="node-details">
+          <pre>${JSON.stringify(currentDesign, null, 2)}</pre>
+        </div>
+      `;
+    }
+
+    // Add global debug logging
+    window.debugDesign = () => {
+      console.log('=== CURRENT DESIGN ===');
+      console.log('Nodes:', currentDesign.nodes);
+      console.log('GlobalVars.styles:', currentDesign.globalVars.styles);
+      console.log('Components:', currentDesign.components);
+      console.log('Full design:', currentDesign);
+    };
+
     // Load design on page load
-    loadDesign();
+    loadDesign().then(() => {
+      console.log('%c✅ Design loaded! Type debugDesign() in console to inspect', 'color: #0e639c; font-weight: bold');
+    });
   </script>
 </body>
 </html>
