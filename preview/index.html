@@ -270,6 +270,7 @@
       <div class="panel-header">
         <span>Rendered from Intermediary Schema</span>
         <span class="badge">Preview</span>
+        <button class="secondary" onclick="showDebugConsole()" style="font-size: 11px; padding: 3px 8px; margin-left: 8px;">Debug Console</button>
       </div>
       <div class="stats" id="stats"></div>
       <div class="panel-content">
@@ -517,9 +518,21 @@
       if (node.fills) {
         const fillsArray = resolveStyle(node.fills);
         if (fillsArray && Array.isArray(fillsArray)) {
+          // Check if any fills are images
+          const hasImageFill = fillsArray.some(fill => fill && typeof fill === 'object' && fill.type === 'IMAGE');
+          if (hasImageFill) {
+            element.setAttribute('data-has-image', 'true');
+            fillsArray.forEach(fill => {
+              if (fill && typeof fill === 'object' && fill.type === 'IMAGE' && fill.imageRef) {
+                addDebugLog('info', `Image fill: ${fill.imageRef} on node ${node.name}`);
+              }
+            });
+          }
+
           const cssValues = fillsArray.map(fill => convertFillToCSS(fill, element)).filter(Boolean);
           if (cssValues.length > 0) {
             element.style.background = cssValues.join(', ');
+            element.setAttribute('data-bg-css', cssValues.join(', '));
           }
         }
       }
@@ -662,6 +675,7 @@
 
     function displayNodeDetails(node) {
       const container = document.getElementById('node-details');
+      const element = document.querySelector(`[data-node-id="${node.id}"]`);
 
       // Resolve styles
       const resolvedNode = { ...node };
@@ -678,9 +692,50 @@
         resolvedNode.effects = currentDesign.globalVars.styles[node.effects];
       }
 
+      // Get applied CSS from the element
+      const appliedCSS = element ? {
+        background: element.style.background || 'none',
+        position: element.style.position || 'static',
+        left: element.style.left || 'auto',
+        top: element.style.top || 'auto',
+        width: element.style.width || 'auto',
+        height: element.style.height || 'auto',
+        display: element.style.display || 'block',
+        flexDirection: element.style.flexDirection || 'none',
+      } : {};
+
+      // Check for images
+      const hasImage = element?.getAttribute('data-has-image') === 'true';
+      const bgCSS = element?.getAttribute('data-bg-css') || 'none';
+
       container.innerHTML = `
-        <div class="node-details">
-          <pre>${JSON.stringify(resolvedNode, null, 2)}</pre>
+        <div style="margin-bottom: 12px;">
+          <h3 style="color: #4ec9b0; margin: 0;">${node.type}: ${node.name}</h3>
+          ${hasImage ? '<div style="color: #dcdcaa; margin-top: 4px;">🖼️ Has image fill</div>' : ''}
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <h4 style="color: #569cd6; margin-bottom: 8px;">Applied CSS</h4>
+          <div style="background: #252526; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">
+            ${Object.entries(appliedCSS).map(([key, value]) => `<div><span style="color: #9cdcfe;">${key}</span>: <span style="color: #ce9178;">${value}</span></div>`).join('')}
+          </div>
+        </div>
+
+        ${hasImage ? `
+        <div style="margin-bottom: 16px;">
+          <h4 style="color: #569cd6; margin-bottom: 8px;">Background CSS</h4>
+          <div style="background: #252526; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 11px; word-break: break-all;">
+            ${bgCSS}
+          </div>
+        </div>
+        ` : ''}
+
+        <div style="margin-bottom: 16px;">
+          <h4 style="color: #569cd6; margin-bottom: 8px;">Intermediary Schema</h4>
+          <button onclick="console.log(${JSON.stringify(JSON.stringify(resolvedNode))}); alert('Logged to console')" style="padding: 4px 8px; margin-bottom: 8px; font-size: 11px;">Log to Console</button>
+          <div class="node-details">
+            <pre>${JSON.stringify(resolvedNode, null, 2)}</pre>
+          </div>
         </div>
       `;
     }
@@ -745,6 +800,114 @@
       `;
     }
 
+    // Debug tools
+    const debugLog = [];
+
+    window.showDebugConsole = () => {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; overflow: auto; padding: 40px;';
+
+      const content = document.createElement('div');
+      content.style.cssText = 'background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; max-width: 1200px; margin: 0 auto; font-family: monospace; font-size: 12px;';
+
+      content.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; color: #fff;">Debug Console</h2>
+          <button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding: 8px 16px; cursor: pointer;">Close</button>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #4ec9b0; margin-bottom: 10px;">Debug Log (${debugLog.length} entries)</h3>
+          <div style="background: #252526; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+            ${debugLog.length > 0 ? debugLog.map(log => `<div style="margin: 4px 0; color: ${log.type === 'error' ? '#f48771' : log.type === 'warn' ? '#dcdcaa' : '#d4d4d4'};">[${log.type}] ${log.message}</div>`).join('') : '<div style="color: #858585;">No logs yet</div>'}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #4ec9b0; margin-bottom: 10px;">Image Assets</h3>
+          <button onclick="checkImageAssets()" style="padding: 6px 12px; margin-bottom: 10px; cursor: pointer;">Check All Images</button>
+          <div id="image-check-results" style="background: #252526; padding: 10px; border-radius: 4px;"></div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #4ec9b0; margin-bottom: 10px;">Style References</h3>
+          <div style="background: #252526; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+            ${Object.keys(currentDesign?.globalVars?.styles || {}).length} total styles
+            <button onclick="console.log(currentDesign.globalVars.styles); alert('Logged to console')" style="margin-left: 10px; padding: 4px 8px; cursor: pointer;">Log to Console</button>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="color: #4ec9b0; margin-bottom: 10px;">Quick Actions</h3>
+          <button onclick="window.debugDesign()" style="padding: 6px 12px; margin-right: 8px; cursor: pointer;">debugDesign()</button>
+          <button onclick="console.log('Nodes:', currentDesign.nodes)" style="padding: 6px 12px; margin-right: 8px; cursor: pointer;">Log Nodes</button>
+          <button onclick="highlightAllImages()" style="padding: 6px 12px; cursor: pointer;">Highlight Image Nodes</button>
+        </div>
+      `;
+
+      modal.appendChild(content);
+      document.body.appendChild(modal);
+    };
+
+    window.checkImageAssets = async () => {
+      const resultDiv = document.getElementById('image-check-results');
+      resultDiv.innerHTML = '<div>Checking images...</div>';
+
+      // Collect all image references from the design
+      const imageRefs = new Set();
+      const collectImages = (styles) => {
+        for (const [key, value] of Object.entries(styles)) {
+          if (Array.isArray(value)) {
+            value.forEach(fill => {
+              if (fill && typeof fill === 'object' && fill.type === 'IMAGE' && fill.imageRef) {
+                imageRefs.add(fill.imageRef);
+              }
+            });
+          }
+        }
+      };
+
+      collectImages(currentDesign.globalVars.styles);
+
+      if (imageRefs.size === 0) {
+        resultDiv.innerHTML = '<div style="color: #858585;">No image references found in design</div>';
+        return;
+      }
+
+      const results = [];
+      for (const imageRef of imageRefs) {
+        const url = \`/assets/\${imageRef}.png\`;
+        try {
+          const response = await fetch(url, { method: 'HEAD' });
+          const status = response.ok ? '✅' : '❌';
+          const color = response.ok ? '#89d185' : '#f48771';
+          results.push(\`<div style="color: \${color};">\${status} \${imageRef}.png (\${response.status})</div>\`);
+        } catch (err) {
+          results.push(\`<div style="color: #f48771;">❌ \${imageRef}.png (failed to fetch)</div>\`);
+        }
+      }
+
+      resultDiv.innerHTML = results.join('');
+    };
+
+    window.highlightAllImages = () => {
+      document.querySelectorAll('[data-has-image]').forEach(el => {
+        el.style.outline = '3px solid #00ff00';
+        el.style.outlineOffset = '2px';
+      });
+      setTimeout(() => {
+        document.querySelectorAll('[data-has-image]').forEach(el => {
+          el.style.outline = '';
+          el.style.outlineOffset = '';
+        });
+      }, 3000);
+    };
+
+    function addDebugLog(type, message) {
+      debugLog.push({ type, message, timestamp: new Date().toISOString() });
+      console.log(\`[\${type.toUpperCase()}]\`, message);
+    }
+
     // Add global debug logging
     window.debugDesign = () => {
       console.log('=== CURRENT DESIGN ===');
@@ -757,6 +920,7 @@
     // Load design on page load
     loadDesign().then(() => {
       console.log('%c✅ Design loaded! Type debugDesign() in console to inspect', 'color: #0e639c; font-weight: bold');
+      addDebugLog('info', 'Design loaded successfully');
     });
   </script>
 </body>
